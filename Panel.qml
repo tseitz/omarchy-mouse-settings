@@ -290,13 +290,14 @@ Panel {
           onClicked: root.applyState("adaptive", 0, 1)
         }
 
-        GearButton {
+        PanelActionButton {
           id: advancedButton
           anchors.right: parent.right
           anchors.verticalCenter: parent.verticalCenter
           iconText: "󰒓"
           tooltipText: "Advanced: min, max, step"
           foreground: root.barForeground
+          bordered: true
           onClicked: root.showAdvanced = true
         }
       }

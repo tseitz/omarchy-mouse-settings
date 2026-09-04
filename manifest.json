@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.tseitz.mouse-settings",
+  "name": "Mouse Settings",
+  "version": "1.0.0",
+  "author": "tseitz",
+  "license": "MIT",
+  "description": "Mouse acceleration toggle, pointer speed, and scroll speed sliders",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Mouse Settings",
+    "description": "Mouse acceleration toggle, pointer speed, and scroll speed sliders",
+    "category": "System",
+    "allowMultiple": false
+  }
+}

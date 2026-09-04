@@ -20,6 +20,11 @@ BarWidget {
   onBarChanged: injectPanel()
   onSettingsChanged: injectPanel()
 
+  // The base BarWidget item has no implicit size of its own — without this,
+  // the bar's layout collapses this widget to 0x0 and the icon never shows.
+  implicitWidth: icon.implicitWidth
+  implicitHeight: icon.implicitHeight
+
   Loader {
     id: panelLoader
     active: true
@@ -32,9 +37,10 @@ BarWidget {
   }
 
   BarIconButton {
+    id: icon
     anchors.fill: parent
     bar: root.bar
-    text: "\u{f037d}"
+    text: "󰍽"
     tooltipText: "Mouse settings"
     onPressed: function(button) {
       if (panelLoader.item && panelLoader.item.toggle) panelLoader.item.toggle()

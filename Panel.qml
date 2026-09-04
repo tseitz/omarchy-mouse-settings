@@ -24,8 +24,44 @@ Panel {
   property real scrollFactor: 1
   property string errorText: ""
   property string lastBackupStamp: ""
+  property bool showAdvanced: false
 
   readonly property bool accelOn: accelProfile === "adaptive"
+
+  // Slider bounds/step are user-tunable (the gear icon) and persist via
+  // `omarchy bar set`, inline on this widget's shell.json entry. Clamped to
+  // Hyprland's actual valid ranges so a hand-edited shell.json can't hand a
+  // slider a bound Hyprland would reject.
+  readonly property real pointerMin: Model.clamp(root.setting("pointerMin", -1), -1, 1)
+  readonly property real pointerMax: Model.clamp(root.setting("pointerMax", 1), -1, 1)
+  readonly property real scrollMin: Model.clamp(root.setting("scrollMin", 0.1), 0, 2)
+  readonly property real scrollMax: Model.clamp(root.setting("scrollMax", 2), 0, 2)
+  readonly property real sliderStep: Model.clamp(root.setting("sliderStep", 0.05), 0.01, 0.5)
+
+  // A single Process handles every advanced-field edit; queuing keeps rapid
+  // edits (or resetAdvanced's five at once) from starting a second `omarchy
+  // bar set` while one is still running.
+  property var advancedQueue: []
+
+  function runNextAdvanced() {
+    if (advancedQueue.length === 0) return
+    var next = advancedQueue.shift()
+    advancedProc.command = ["omarchy", "bar", "set", root.moduleName, next.key, next.value.toFixed(2), "--json"]
+    advancedProc.running = true
+  }
+
+  function setAdvanced(key, value) {
+    advancedQueue.push({ key: key, value: value })
+    if (!advancedProc.running) runNextAdvanced()
+  }
+
+  function resetAdvanced() {
+    setAdvanced("pointerMin", -1)
+    setAdvanced("pointerMax", 1)
+    setAdvanced("scrollMin", 0.1)
+    setAdvanced("scrollMax", 2)
+    setAdvanced("sliderStep", 0.05)
+  }
 
   function syncFromText(text) {
     var parsed = Model.parseInput(text)
@@ -76,6 +112,12 @@ Panel {
   }
 
   Process {
+    id: advancedProc
+    stdout: StdioCollector { waitForEnd: true }
+    onRunningChanged: if (!running) root.runNextAdvanced()
+  }
+
+  Process {
     id: reloadProc
     command: ["sh", "-c", "hyprctl reload >/dev/null 2>&1; hyprctl configerrors"]
     stdout: StdioCollector {
@@ -105,11 +147,13 @@ Panel {
     bar: root.bar
     owner: root
     contentWidth: card.fittedContentWidth(Style.space(300))
-    contentHeight: card.fittedContentHeight(column.implicitHeight)
+    contentHeight: card.fittedContentHeight(
+      root.showAdvanced ? advancedColumn.implicitHeight : mainColumn.implicitHeight)
     open: root.opened
 
     Column {
-      id: column
+      id: mainColumn
+      visible: !root.showAdvanced
       width: parent.width
       spacing: Style.spacing.lg
 
@@ -177,9 +221,9 @@ Panel {
           id: speedSlider
           width: parent.width
           bar: root.bar
-          minimum: -1
-          maximum: 1
-          step: 0.05
+          minimum: root.pointerMin
+          maximum: root.pointerMax
+          step: root.sliderStep
           value: root.sensitivity
           onMoved: speedDebounce.restart()
           onReleased: function(v) {
@@ -211,11 +255,9 @@ Panel {
           id: scrollSlider
           width: parent.width
           bar: root.bar
-          // 0 means "no scroll movement at all" — a floor keeps the wheel
-          // usable at the slowest setting instead of silently dead.
-          minimum: 0.1
-          maximum: 2
-          step: 0.05
+          minimum: root.scrollMin
+          maximum: root.scrollMax
+          step: root.sliderStep
           value: root.scrollFactor
           onMoved: scrollDebounce.restart()
           onReleased: function(v) {
@@ -234,15 +276,29 @@ Panel {
 
       PanelSeparator { foreground: root.barForeground }
 
-      Row {
+      Item {
         width: parent.width
-        layoutDirection: Qt.RightToLeft
+        height: Math.max(resetButton.implicitHeight, advancedButton.implicitHeight)
 
         Button {
+          id: resetButton
+          anchors.left: parent.left
+          anchors.verticalCenter: parent.verticalCenter
           text: "Reset to defaults"
           foreground: root.barForeground
           bordered: true
           onClicked: root.applyState("adaptive", 0, 1)
+        }
+
+        PanelActionButton {
+          id: advancedButton
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          iconText: "󰒓"
+          tooltipText: "Advanced: min, max, step"
+          foreground: root.barForeground
+          bordered: true
+          onClicked: root.showAdvanced = true
         }
       }
 
@@ -254,6 +310,114 @@ Panel {
         wrapMode: Text.WordWrap
         font.family: Style.font.family
         font.pixelSize: Style.font.caption
+      }
+    }
+
+    Column {
+      id: advancedColumn
+      visible: root.showAdvanced
+      width: parent.width
+      spacing: Style.spacing.lg
+
+      Text {
+        text: "Advanced"
+        color: root.barForeground
+        font.family: Style.font.family
+        font.pixelSize: Style.font.title
+        font.bold: true
+      }
+
+      PanelSeparator { foreground: root.barForeground }
+
+      PanelSectionHeader { text: "Pointer speed range"; foreground: root.barForeground }
+
+      Row {
+        spacing: Style.spacing.lg
+
+        FloatSpinField {
+          label: "Min"
+          value: root.pointerMin
+          from: -1
+          to: root.pointerMax - 0.05
+          stepSize: 0.05
+          foreground: root.barForeground
+          onModified: function(v) { root.setAdvanced("pointerMin", v) }
+        }
+
+        FloatSpinField {
+          label: "Max"
+          value: root.pointerMax
+          from: root.pointerMin + 0.05
+          to: 1
+          stepSize: 0.05
+          foreground: root.barForeground
+          onModified: function(v) { root.setAdvanced("pointerMax", v) }
+        }
+      }
+
+      PanelSectionHeader { text: "Scroll speed range"; foreground: root.barForeground }
+
+      Row {
+        spacing: Style.spacing.lg
+
+        FloatSpinField {
+          label: "Min"
+          value: root.scrollMin
+          from: 0
+          to: root.scrollMax - 0.05
+          stepSize: 0.05
+          foreground: root.barForeground
+          onModified: function(v) { root.setAdvanced("scrollMin", v) }
+        }
+
+        FloatSpinField {
+          label: "Max"
+          value: root.scrollMax
+          from: root.scrollMin + 0.05
+          to: 2
+          stepSize: 0.05
+          foreground: root.barForeground
+          onModified: function(v) { root.setAdvanced("scrollMax", v) }
+        }
+      }
+
+      PanelSectionHeader { text: "Slider precision"; foreground: root.barForeground }
+
+      FloatSpinField {
+        label: "Step size"
+        value: root.sliderStep
+        from: 0.01
+        to: 0.5
+        stepSize: 0.01
+        foreground: root.barForeground
+        onModified: function(v) { root.setAdvanced("sliderStep", v) }
+      }
+
+      PanelSeparator { foreground: root.barForeground }
+
+      Item {
+        width: parent.width
+        height: Math.max(resetRangesButton.implicitHeight, doneButton.implicitHeight)
+
+        Button {
+          id: resetRangesButton
+          anchors.left: parent.left
+          anchors.verticalCenter: parent.verticalCenter
+          text: "Reset ranges"
+          foreground: root.barForeground
+          bordered: true
+          onClicked: root.resetAdvanced()
+        }
+
+        Button {
+          id: doneButton
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          text: "Done"
+          foreground: root.barForeground
+          bordered: true
+          onClicked: root.showAdvanced = false
+        }
       }
     }
   }

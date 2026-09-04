@@ -8,6 +8,9 @@ kind of panel Windows and macOS ship for mouse settings, built for Hyprland.
 - **Pointer speed** — slider, matches Hyprland's `sensitivity` range (-1 to 1).
 - **Scroll speed** — slider, matches Hyprland's `scroll_factor` range (0 to 2).
 - **Reset to defaults** — one click back to `adaptive` / `0` / `1`.
+- **Advanced** (gear icon) — customize each slider's min, max, and step size.
+  Persisted on the widget's own `shell.json` entry via `omarchy bar set`, so
+  it survives plugin updates.
 
 Changes apply immediately: the plugin edits `~/.config/hypr/input.lua` and
 reloads Hyprland. It edits only the `sensitivity`, `accel_profile`, and

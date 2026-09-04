@@ -211,7 +211,9 @@ Panel {
           id: scrollSlider
           width: parent.width
           bar: root.bar
-          minimum: 0
+          // 0 means "no scroll movement at all" — a floor keeps the wheel
+          // usable at the slowest setting instead of silently dead.
+          minimum: 0.1
           maximum: 2
           step: 0.05
           value: root.scrollFactor
